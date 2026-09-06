@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#070a10">
+  <meta name="description" content="太陽と8つの惑星、そして月。マウスで視点を変えながら探索できる、小さな太陽系。">
+  <title>SOLAR ATLAS — 太陽系を探索</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23070a10'/%3E%3Ccircle cx='32' cy='32' r='9' fill='%23e8b579'/%3E%3Cellipse cx='32' cy='32' rx='26' ry='13' transform='rotate(-35 32 32)' fill='none' stroke='%23e8b579' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
+  </script>
+</head>
+<body>
+  <main id="app" aria-label="太陽系の3D探索">
+    <div id="scene" aria-label="ドラッグで回転、ホイールでズームできる太陽系"></div>
+    <div id="labels" aria-label="天体名"></div>
+    <div class="vignette" aria-hidden="true"></div>
+
+    <header class="masthead">
+      <a class="brand" href="./" aria-label="Solar Atlas ホーム">
+        <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="5"/><ellipse cx="20" cy="20" rx="18" ry="8" transform="rotate(-35 20 20)"/></svg>
+        <span>SOLAR <b>ATLAS</b></span>
+      </a>
+      <span class="header-rule"></span>
+      <span id="edition" class="edition">太陽系を探索</span>
+      <div id="language-switch" class="language-switch" role="group" aria-label="Language / 言語">
+        <button data-language="ja" aria-pressed="true">JA</button>
+        <span aria-hidden="true">/</span>
+        <button data-language="en" aria-pressed="false">EN</button>
+      </div>
+      <div class="live"><span class="live-dot"></span><span id="live-state">SIMULATION LIVE</span></div>
+    </header>
+
+    <div class="scene-heading" aria-hidden="true">
+      <span id="scene-eyebrow" class="eyebrow">OUR COSMIC NEIGHBORHOOD</span>
+      <p id="scene-title">太陽系</p>
+      <span id="scene-caption" class="scene-caption">ひとつの恒星と、8つの惑星。</span>
+    </div>
+
+    <aside class="explorer" aria-label="天体の紹介">
+      <div class="panel-top"><span id="panel-mode" class="eyebrow">SYSTEM OVERVIEW</span><a class="source-link" href="https://ssd.jpl.nasa.gov/planets/phys_par.html" target="_blank" rel="noreferrer" aria-label="公転周期の出典：NASA / JPL（別タブで開く）" title="公転周期の出典：NASA / JPL">↗</a></div>
+      <section class="body-info" aria-live="polite" aria-atomic="true">
+        <div class="body-kicker"><span id="body-category">私たちの太陽系</span><span id="body-index">00 / 10</span></div>
+        <h1 id="body-name">太陽系</h1>
+        <p id="body-english" class="body-english">THE SOLAR SYSTEM</p>
+        <p id="body-description">太陽をめぐる8つの惑星と、地球に寄り添う月。天体を選んで、その表情や動きを近くから眺めてみましょう。</p>
+        <dl class="body-stats">
+          <div><dt id="stat-label-one">惑星</dt><dd id="stat-one">08 <small>PLANETS</small></dd></div>
+          <div><dt id="stat-label-two">表示中の衛星</dt><dd id="stat-two">01 <small>MOON</small></dd></div>
+        </dl>
+      </section>
+      <div class="planet-navigation">
+        <div class="nav-heading"><h2 id="nav-title">天体を選ぶ</h2><span><span id="nav-count">10 天体</span> <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span></div>
+        <nav id="body-nav" aria-label="天体を選択"></nav>
+      </div>
+    </aside>
+
+    <div class="bottom-ui">
+      <div class="interaction-hint"><span><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="2" width="10" height="16" rx="5"/><path d="M10 2v6"/></svg><span id="rotate-hint">ドラッグで回転</span></span><i></i><span id="zoom-hint">スクロールでズーム</span><i></i><span id="pan-hint">右ドラッグで移動</span></div>
+      <section class="toolbar" aria-label="シミュレーション操作">
+        <button id="play-toggle" class="play-toggle" aria-label="一時停止" title="一時停止 / 再生（Space）"><svg id="pause-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M6 4v12M14 4v12"/></svg><svg id="play-icon" viewBox="0 0 20 20" aria-hidden="true" hidden><path d="m6 3 11 7-11 7Z"/></svg></button>
+        <div class="speed-control"><span id="speed-label" class="control-label">再生速度</span><div id="speed-options" class="speed-options" role="group" aria-label="再生速度"><button data-speed="0.25" aria-pressed="false">0.25×</button><button data-speed="1" aria-pressed="true">1×</button><button data-speed="10" aria-pressed="false">10×</button><button data-speed="100" aria-pressed="false">100×</button></div></div>
+        <span class="toolbar-divider"></span>
+        <button id="orbits-toggle" class="text-toggle" aria-pressed="true"><svg viewBox="0 0 20 20" aria-hidden="true"><ellipse cx="10" cy="10" rx="9" ry="4" transform="rotate(-35 10 10)"/><circle cx="10" cy="10" r="1"/></svg><span id="orbits-label">軌道線</span></button>
+        <button id="labels-toggle" class="text-toggle" aria-pressed="true"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 5h12M10 5v11M7 16h6"/></svg><span id="labels-label">ラベル</span></button>
+        <span class="toolbar-divider"></span>
+        <button id="reset-view" class="reset-view" title="全体に戻る（Esc）"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 3H3v4m10-4h4v4M3 13v4h4m10-4v4h-4"/></svg><span id="reset-label">全体に戻る</span></button>
+      </section>
+      <div class="time-readout"><span class="readout-dot"></span><span id="time-scale">地球の1年 = 60秒</span><span class="elapsed"><span id="elapsed-prefix">経過</span> <span id="elapsed-years">0.00</span> <span id="elapsed-unit">地球年</span></span></div>
+    </div>
+    <footer class="page-footer"><span id="scale-note">サイズ・距離・自転速度は見やすく調整</span><span id="footer-note">SCROLL CLOSER. DISCOVER MORE.</span></footer>
+
+    <section id="mobile-dock" aria-label="Solar Atlas">
+      <div class="mobile-summary"><span id="mobile-name">太陽系</span><button data-open-panel="bodies" data-mobile-text="bodiesTab">天体</button><button data-open-panel="info" data-mobile-text="infoTab">解説</button></div>
+      <div class="mobile-controls"><div id="mobile-play"></div><select id="mobile-speed" aria-label="再生速度"><option value="0.25">0.25×</option><option value="1" selected>1×</option><option value="10">10×</option><option value="100">100×</option></select><div id="mobile-reset"></div><button data-open-panel="settings" data-mobile-text="settingsTab">表示</button></div>
+      <p id="mobile-hint"></p>
+    </section>
+
+    <div id="loading" class="loading-screen" role="status"><span class="loading-orbit" aria-hidden="true"></span><p>太陽系を描いています<span>BUILDING YOUR UNIVERSE</span></p></div>
+    <div id="error" class="error-screen" role="alert" hidden><span class="eyebrow">UNABLE TO START</span><h2>太陽系を表示できませんでした</h2><p id="error-message"></p><button onclick="location.reload()">もう一度読み込む</button></div>
+    <noscript><div class="error-screen"><h2>JavaScriptを有効にしてください</h2><p>太陽系の表示にはJavaScriptが必要です。</p></div></noscript>
+  </main>
+  <dialog id="mobile-sheet" data-panel="bodies" aria-label="天体の紹介">
+    <div class="sheet-surface">
+      <header class="sheet-header"><div class="sheet-tabs" role="group" aria-label="Solar Atlas"><button data-panel="bodies" data-mobile-text="bodiesTab" aria-pressed="true">天体</button><button data-panel="info" data-mobile-text="infoTab" aria-pressed="false">解説</button><button data-panel="settings" data-mobile-text="settingsTab" aria-pressed="false">表示</button></div><button id="sheet-close" aria-label="閉じる">×</button></header>
+      <div id="sheet-scroll"><div id="sheet-explorer"></div><section id="sheet-settings"><p data-mobile-text="displayHelp">軌道線とラベルの表示を切り替えます。</p></section></div>
+    </div>
+  </dialog>
+  <script type="module">
+    const language=(()=>{try{return localStorage.getItem('solar-atlas-language')==='en'?'en':'ja';}catch{return 'ja';}})();
+    document.documentElement.lang=language;
+    const messages=language==='en'?{
+      heading:'Unable to display the solar system',retry:'Reload',loading:'Drawing the solar system',
+      webgl:'WebGL2 is unavailable. Try an updated Safari, Chrome, or Edge browser with 3D graphics support.',
+      load:'Loading failed. Check your internet connection and open this page through a web server, then try again.'
+    }:{heading:'太陽系を表示できませんでした',retry:'もう一度読み込む',loading:'太陽系を描いています',webgl:'WebGL2が利用できません。3D描画に対応した最新のSafari・Chrome・Edgeで、再度お試しください。',load:'読み込みに失敗しました。インターネット接続と、Webサーバーから開いていることを確認してください。'};
+    document.querySelector('#error h2').textContent=messages.heading;
+    document.querySelector('#error button').textContent=messages.retry;
+    document.querySelector('#loading p').firstChild.textContent=messages.loading;
+    const showError = (message) => {
+      document.querySelector('#loading').hidden = true;
+      document.querySelector('#error-message').textContent = message;
+      document.querySelector('#error').hidden = false;
+    };
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('webgl2');
+    if (!context) {
+      showError(messages.webgl);
+    } else {
+      context.getExtension('WEBGL_lose_context')?.loseContext();
+      try { await import('./js/main.js'); }
+      catch (error) {
+        console.error(error);
+        showError(messages.load);
+      }
+    }
+  </script>
+</body>
+</html>
