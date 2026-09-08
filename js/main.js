@@ -229,12 +229,12 @@ function updateInfo(body) {
 }
 
 function updateHints() {
-  const t=textFor(state.language),touch=coarsePointer.matches;
-  $('#rotate-hint').textContent=touch?t.touchRotate:t.rotate;
-  $('#zoom-hint').textContent=touch?t.touchZoom:t.zoom;
-  $('#pan-hint').textContent=state.selectedId?t.tracking:(touch?t.touchPan:t.pan);
-  $('#mobile-hint').textContent=touch?t.touchHint:`${t.rotate} · ${t.zoom}`;
-  stage.setAttribute('aria-label',touch?t.touchHint:t.sceneLabel);
+  const t=textFor(state.language);
+  $('#rotate-hint').textContent=mobile?t.touchRotate:t.rotate;
+  $('#zoom-hint').textContent=mobile?t.touchZoom:t.zoom;
+  $('#pan-hint').textContent=state.selectedId?t.tracking:(mobile?t.touchPan:t.pan);
+  $('#mobile-hint').textContent=mobile?t.touchHint:`${t.rotate} · ${t.zoom}`;
+  stage.setAttribute('aria-label',mobile?t.touchHint:t.sceneLabel);
   renderer.domElement.setAttribute('aria-label',t.appLabel);
 }
 
