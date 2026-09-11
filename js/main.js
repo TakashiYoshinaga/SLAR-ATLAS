@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { BODIES, EARTH_YEAR_SECONDS, EARTH_YEAR_DAYS } from './data.js';
-import { createSimulation, advanceSimulation, localPosition, spinAngle } from './simulation.js';
+import { createSimulation, advanceSimulation, localPosition, spinAngle, relativePosition, apparentTrailSeconds } from './simulation.js';
 import { planetTexture, glowTexture, ringTexture, starTexture, randomGenerator } from './textures.js';
 import { textFor, bodyName, bodyCategory, bodyDescription, timeScaleText } from './i18n.js';
 import { labelAnchor, updateLabelVisibility } from './label-layout.js';
@@ -34,10 +34,14 @@ controls.zoomSpeed=.85;controls.rotateSpeed=.65;
 const simulation=createSimulation();
 const bodies=new Map();
 const orbitLines=[];
+const trailGroup=new THREE.Group();trailGroup.visible=false;
+const TRAIL_LOOPS=5;
+let trailCenterId=null,trailSeconds=NaN,trailStartSeconds=0;
+const trailSample={x:0,y:0,z:0};
 const clickable=[];
 let savedLanguage='ja';
 try { savedLanguage=localStorage.getItem('solar-atlas-language')==='en'?'en':'ja'; } catch {}
-const state={selectedId:null,orbitsVisible:true,labelsVisible:true,language:savedLanguage};
+const state={selectedId:null,orbitsVisible:true,labelsVisible:true,trailsVisible:false,language:savedLanguage};
 let cameraTransition=null;
 const followPosition=new THREE.Vector3(),lastFollowPosition=new THREE.Vector3(),followDelta=new THREE.Vector3();
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)');
@@ -67,6 +71,52 @@ function makeOrbit(body) {
   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
   const line=new THREE.LineLoop(geometry,new THREE.LineBasicMaterial({color:body.id==='moon'?'#8c9aaa':'#738097',transparent:true,opacity:body.id==='moon'?.21:.2,depthWrite:false}));
   orbitLines.push(line);return line;
+}
+function buildTrails() {
+  const count=mobile?256:512;
+  if (bodies.get('sun')?.trail?.geometry.attributes.position.count===count) return;
+  for (const view of bodies.values()) {
+    if (view.trail) {trailGroup.remove(view.trail);view.trail.geometry.dispose();view.trail.material.dispose();}
+    const geometry=new THREE.BufferGeometry();
+    geometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(count*3),3).setUsage(THREE.DynamicDrawUsage));
+    // Age per index never changes, so the fade is written once. Vertex colors are
+    // not color managed; read them off a Color so they land in the working space.
+    const colors=new Float32Array(count*4),tint=new THREE.Color(view.data.color);
+    for (let i=0;i<count;i++) {const u=i/(count-1);colors.set([tint.r,tint.g,tint.b,.16+.68*Math.pow(u,1.6)],i*4);}
+    geometry.setAttribute('color',new THREE.BufferAttribute(colors,4));
+    view.trail=new THREE.Line(geometry,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,depthWrite:false}));
+    // The samples move every frame, so the cached bounding sphere would be stale.
+    view.trail.frustumCulled=false;view.trail.visible=view.trailWindow>0;trailGroup.add(view.trail);
+  }
+  trailSeconds=NaN;
+}
+// Where every other body appears to go for an observer riding the selected one.
+function updateTrails() {
+  if (!state.trailsVisible) return;
+  const centerId=state.selectedId??'sun',center=bodies.get(centerId);
+  if (centerId!==trailCenterId) {
+    // A body's root only ever translates, so the group rides it without rotating.
+    trailCenterId=centerId;trailSeconds=NaN;trailStartSeconds=simulation.elapsedSeconds;center.root.add(trailGroup);
+    for (const view of bodies.values()) {
+      view.trailWindow=apparentTrailSeconds(view.data,center.data,TRAIL_LOOPS);
+      view.trail.visible=view.trailWindow>0;
+    }
+  }
+  if (simulation.elapsedSeconds===trailSeconds) return;
+  trailSeconds=simulation.elapsedSeconds;
+  const drawn=simulation.elapsedSeconds-trailStartSeconds;
+  for (const view of bodies.values()) {
+    if (!view.trail.visible) continue;
+    const attribute=view.trail.geometry.attributes.position,array=attribute.array,count=attribute.count;
+    // Grow out of the body from the moment drawing began, then slide once full.
+    const span=Math.min(view.trailWindow,drawn);
+    const step=span/(count-1),start=simulation.elapsedSeconds-span;
+    for (let i=0;i<count;i++) {
+      relativePosition(view.data,center.data,start+i*step,trailSample);
+      array[i*3]=trailSample.x;array[i*3+1]=trailSample.y;array[i*3+2]=trailSample.z;
+    }
+    attribute.needsUpdate=true;
+  }
 }
 
 for (const [index,body] of BODIES.entries()) {
@@ -134,7 +184,7 @@ function resize() {
   if (mobile!==nextMobile) for (const view of bodies.values()) {
     view.mesh.geometry.dispose();view.mesh.geometry=new THREE.SphereGeometry(view.data.radius,nextMobile?48:64,nextMobile?32:40);
   }
-  mobile=nextMobile;mobileUI.setMobile(mobile);
+  mobile=nextMobile;mobileUI.setMobile(mobile);buildTrails();
   const header=$('.masthead').getBoundingClientRect();
   const dock=$(mobile?'#mobile-dock':'.bottom-ui').getBoundingClientRect();
   area=viewingArea({width:rect.width,height:rect.height,mobile,headerBottom:header.bottom,
@@ -193,6 +243,10 @@ $('#orbits-toggle').addEventListener('click',()=>{
 $('#labels-toggle').addEventListener('click',()=>{
   state.labelsVisible=!state.labelsVisible;labelLayer.hidden=!state.labelsVisible;
   $('#labels-toggle').setAttribute('aria-pressed',String(state.labelsVisible));
+});
+$('#trails-toggle').addEventListener('click',()=>{
+  state.trailsVisible=!state.trailsVisible;trailGroup.visible=state.trailsVisible;trailCenterId=null;
+  $('#trails-toggle').setAttribute('aria-pressed',String(state.trailsVisible));
 });
 function updateInfo(body) {
   const t=textFor(state.language),isJapanese=state.language==='ja';
@@ -256,6 +310,7 @@ function applyLanguage(language) {
   $('#rotate-hint').textContent=t.rotate;$('#zoom-hint').textContent=t.zoom;
   $('#speed-label').textContent=t.speed;$('#orbits-label').textContent=t.orbits;
   $('#labels-label').textContent=t.labels;$('#reset-label').textContent=t.reset;
+  $('#trails-label').textContent=t.trails;$('#trails-toggle').title=t.trailsTitle;
   $('#reset-view').title=t.resetTitle;$('#play-toggle').title=t.playTitle;
   $('#play-toggle').setAttribute('aria-label',simulation.paused?t.play:t.pause);
   $('#elapsed-prefix').textContent=t.elapsed;$('#elapsed-unit').textContent=t.earthYears;
@@ -419,7 +474,7 @@ function animate(time) {
     body.root.position.set(position.x,position.y,position.z);
     body.mesh.rotation.y=spinAngle(body.data,simulation.elapsedSeconds);
   }
-  updateCamera(delta);controls.update();
+  updateTrails();updateCamera(delta);controls.update();
   renderer.render(scene,camera);updateLabels(delta);
   $('#elapsed-years').textContent=(simulation.elapsedSeconds/EARTH_YEAR_SECONDS).toFixed(2);
 }

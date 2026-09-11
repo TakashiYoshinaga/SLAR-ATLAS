@@ -1,7 +1,7 @@
 export function createMobileUI({onModalChange}) {
   const $=selector=>document.querySelector(selector);
   const dialog=$('#mobile-sheet'),explorer=$('.explorer');
-  const moved=['.explorer','#play-toggle','#reset-view','#orbits-toggle','#labels-toggle'].map(selector=>{
+  const moved=['.explorer','#play-toggle','#reset-view','#orbits-toggle','#labels-toggle','#trails-toggle'].map(selector=>{
     const node=$(selector),slot=document.createComment(selector);
     node.before(slot);return {node,slot};
   });
@@ -40,7 +40,7 @@ export function createMobileUI({onModalChange}) {
         $('#sheet-explorer').append(explorer);
         $('#mobile-play').append($('#play-toggle'));
         $('#mobile-reset').append($('#reset-view'));
-        $('#sheet-settings').append($('#orbits-toggle'),$('#labels-toggle'));
+        $('#sheet-settings').append($('#orbits-toggle'),$('#labels-toggle'),$('#trails-toggle'));
       } else {
         for (const {node,slot} of moved) slot.after(node);
       }
